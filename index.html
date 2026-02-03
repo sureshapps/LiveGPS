@@ -1,1 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fast GPS Test</title>
 
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3b82f6">
+
+<style>
+:root {
+  --glass: rgba(255,255,255,0.2);
+  --border: rgba(255,255,255,0.35);
+  --accent: #3b82f6;
+}
+
+* { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont; }
+
+body {
+  margin: 0;
+  background: linear-gradient(135deg,#c7d2fe,#fde68a);
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 420px;
+  margin: auto;
+  padding: 16px 16px 80px;
+}
+
+.card {
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.label { font-size: 12px; opacity: 0.7; }
+.value { font-size: 18px; font-weight: 600; }
+
+iframe {
+  width: 100%;
+  height: 320px;
+  border: none;
+  border-radius: 16px;
+}
+
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+
+.tab {
+  flex: 1;
+  padding: 12px;
+  text-align: center;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab.active { color: var(--accent); }
+
+.hidden { display: none; }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<!-- HOME -->
+<div id="home">
+  <div class="card">
+    <div class="label">Latitude</div>
+    <div id="lat" class="value">–</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Longitude</div>
+    <div id="lng" class="value">–</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Accuracy</div>
+    <div id="accuracy" class="value">– m</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Speed</div>
+    <div id="speed" class="value">– km/h</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Heading</div>
+    <div id="heading" class="value">–°</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Network Ping</div>
+    <div id="ping" class="value">– ms</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Status</div>
+    <div id="status" class="value">–</div>
+  </div>
+</div>
+
+<!-- MAP -->
+<div id="mapView" class="hidden">
+  <iframe id="map"></iframe>
+</div>
+
+</div>
+
+<!-- TAB BAR -->
+<div class="tabbar">
+  <div class="tab active" onclick="showHome()">Home</div>
+  <div class="tab" onclick="showMap()">Map</div>
+</div>
+
+<script>
+let watchId;
+let lastLat, lastLng;
+
+function showHome() {
+  home.classList.remove('hidden');
+  mapView.classList.add('hidden');
+  setActive(0);
+}
+
+function showMap() {
+  home.classList.add('hidden');
+  mapView.classList.remove('hidden');
+  setActive(1);
+}
+
+function setActive(i) {
+  document.querySelectorAll('.tab').forEach((t,idx)=>{
+    t.classList.toggle('active', idx===i);
+  });
+}
+
+// REAL-TIME GPS
+watchId = navigator.geolocation.watchPosition(pos=>{
+  const { latitude, longitude, accuracy, speed, heading } = pos.coords;
+
+  lastLat = latitude;
+  lastLng = longitude;
+
+  lat.textContent = latitude.toFixed(6);
+  lng.textContent = longitude.toFixed(6);
+  accuracy.textContent = accuracy.toFixed(1) + " m";
+  speed.textContent = speed ? (speed*3.6).toFixed(1) + " km/h" : "0 km/h";
+  heading.textContent = heading !== null ? heading.toFixed(0) + "°" : "–";
+
+  map.src =
+   `https://www.openstreetmap.org/export/embed.html?marker=${latitude}%2C${longitude}&zoom=16`;
+
+  status.textContent = navigator.onLine ? "Online" : "Offline";
+},{enableHighAccuracy:true});
+
+// COMPASS (iOS needs permission)
+window.addEventListener("deviceorientation", e=>{
+  if(e.alpha) heading.textContent = e.alpha.toFixed(0)+"°";
+});
+
+// NETWORK PING
+async function pingTest() {
+  const start = performance.now();
+  try {
+    await fetch("https://www.google.com/favicon.ico",{mode:"no-cors"});
+    ping.textContent = Math.round(performance.now()-start)+" ms";
+  } catch {
+    ping.textContent = "Fail";
+  }
+}
+setInterval(pingTest,5000);
+pingTest();
+
+// OFFLINE DETECTION
+window.addEventListener("online",()=>status.textContent="Online");
+window.addEventListener("offline",()=>status.textContent="Offline");
+
+// SERVICE WORKER
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+</body>
+</html>
